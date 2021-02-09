@@ -69,7 +69,7 @@ function CodePre(nodeList) {
 	}
 }
 
-var codePre = new CodePre(document.querySelectorAll(".markdown-body pre")); // github style
+var codePre = new CodePre(document.querySelectorAll(".markdown-body pre, .code-block code")); // github style
 
 function changeBackgroundColor(element, color, exist) {
 	if (exist) {
@@ -83,6 +83,7 @@ function replaceElement(umlElem, srcUrl) {
 		var imgElem = document.createElement("img");
 		imgElem.setAttribute("src", escapeHtml(srcUrl));
 		imgElem.setAttribute("title", "");
+		imgElem.style.margin = "auto";
 		parent.replaceChild(imgElem, umlElem);
 		changeBackgroundColor(parent, codePre.parentColor, codePre.exist);
 
@@ -142,6 +143,9 @@ var siteProfiles = {
 				plantuml = elem.textContent.trim();
 			}
 			return compress(plantuml);
+		},
+		"waitFor": function (document) {
+			return document.querySelector("i[aria-label='Loading content…']") === null;
 		}
 	},
 	"bitbucket.org": {
@@ -149,11 +153,14 @@ var siteProfiles = {
 		"extract": function (elem) {
 			return elem.innerText.trim();
 		},
-		replace: function(elem) {
+		"replace": function(elem) {
 			return elem;
 		},
-		compress: function(elem) {
+		"compress": function(elem) {
 			return compress(elem.innerText.trim());
+		},
+		"waitFor": function (document) {
+			return document.getElementsByClassName("language-plantuml").length > 0;
 		}
 	},
 	"backlog.jp": {
@@ -184,19 +191,24 @@ var siteProfiles = {
 			}
 			return compress(plantuml);
 		}
-	}
+	},
+	"atlassian.net": {
+		"selector": ".code-block code",
+		"extract": function (elem) {
+			return elem.innerText.trim();
+		},
+		"replace": function(elem) {
+			return elem.closest ? (elem.closest("span") || elem) : elem;
+			// return elem;
+		},
+		"compress": function(elem) {
+			return compress(elem.innerText.trim());
+		},
+		"waitFor": function (document) {
+			return document.querySelector("#addCommentButton") !== null;
+		}
+	},
 };
-
-
-function loop(counter, retry, siteProfile, baseUrl){
-	counter++;
-	if (document.querySelector("i[aria-label='Loading content…']")==null) counter+=retry;
-	var id = setTimeout(loop,100,counter,retry, siteProfile, baseUrl);
-	if(counter>=retry){
-		clearTimeout(id);
-		onLoadAction(siteProfile, baseUrl);
-	}
-}
 
 function onLoadAction(siteProfile, baseUrl){
 	[].forEach.call(document.querySelectorAll(siteProfile.selector), function (umlElem) {
@@ -219,30 +231,12 @@ function run(config) {
 	var hostname = window.location.hostname.split(".").slice(-2).join(".");
 	var siteProfile = siteProfiles[hostname] || siteProfiles["default"];
 	var baseUrl = config.baseUrl || "https://www.plantuml.com/plantuml/img/";
-	if (document.querySelector("i[aria-label='Loading content…']")!=null){ // for wait loading @ gitlab.com
-		loop(1, 10, siteProfile, baseUrl);
-	}
-	[].forEach.call(document.querySelectorAll(siteProfile.selector), function (umlElem) {
-		var plantuml = siteProfile.extract(umlElem);
-		if (plantuml.substr(0, "@start".length) !== "@start") return;
-		var plantUmlServerUrl = baseUrl + siteProfile.compress(umlElem);
-		var replaceElem = siteProfile.replace(umlElem);
-		if (plantUmlServerUrl.lastIndexOf("https", 0) === 0) { // if URL starts with "https"
-			replaceElement(replaceElem, plantUmlServerUrl);
-		} else {
-			// to avoid mixed-content
-			chrome.runtime.sendMessage({ "action": "plantuml", "url": plantUmlServerUrl }, function(dataUri) {
-				replaceElement(replaceElem, dataUri);
-			});
-		}
-	});
-}
+	console.trace({hostname, config, siteProfile});
 
-chrome.storage.local.get("baseUrl", function(config) {
-	if (window.location.hostname === "bitbucket.org") {
+	if (siteProfile.waitFor) {
 		var observer = new MutationObserver(function() {
-			if (document.getElementsByClassName("language-plantuml").length > 0) {
-				run(config);
+			if (siteProfile.waitFor(document)) {
+				onLoadAction(siteProfile, baseUrl);
 				observer.disconnect();
 			}
 		});
@@ -253,7 +247,11 @@ chrome.storage.local.get("baseUrl", function(config) {
 			childList: true,
 			subtree: true
 		});
+	} else {
+		onLoadAction(siteProfile, baseUrl);
 	}
+}
 
+chrome.storage.local.get("baseUrl", function(config) {
 	run(config);
 });
