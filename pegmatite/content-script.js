@@ -195,14 +195,22 @@ var siteProfiles = {
 	"atlassian.net": {
 		"selector": ".code-block code",
 		"extract": function (elem) {
-			return elem.innerText.trim();
+			var wholeCode = "";
+			for (var index = 0; index < elem.childNodes.length; ++index) {
+				var childNode = elem.childNodes.item(index);
+				if (childNode.className && childNode.className.includes("linenumber")) {
+					continue;
+				}
+				wholeCode += childNode.innerText || childNode.textContent;
+			}
+			return wholeCode.trim();
 		},
 		"replace": function(elem) {
 			return elem.closest ? (elem.closest("span") || elem) : elem;
 			// return elem;
 		},
 		"compress": function(elem) {
-			return compress(elem.innerText.trim());
+			return compress(siteProfiles["atlassian.net"].extract(elem));
 		},
 		"waitFor": function (document) {
 			return document.querySelector("#addCommentButton") !== null;
@@ -231,7 +239,6 @@ function run(config) {
 	var hostname = window.location.hostname.split(".").slice(-2).join(".");
 	var siteProfile = siteProfiles[hostname] || siteProfiles["default"];
 	var baseUrl = config.baseUrl || "https://www.plantuml.com/plantuml/img/";
-	console.trace({hostname, config, siteProfile});
 
 	if (siteProfile.waitFor) {
 		var observer = new MutationObserver(function() {
