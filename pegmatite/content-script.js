@@ -84,6 +84,7 @@ function replaceElement(umlElem, srcUrl) {
 		imgElem.setAttribute("src", escapeHtml(srcUrl));
 		imgElem.setAttribute("title", "");
 		imgElem.style.margin = "auto";
+		imgElem.style.display = "block";
 		parent.replaceChild(imgElem, umlElem);
 		changeBackgroundColor(parent, codePre.parentColor, codePre.exist);
 
