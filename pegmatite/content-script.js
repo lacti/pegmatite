@@ -77,14 +77,9 @@ function changeBackgroundColor(element, color, exist) {
 	}
 }
 
-function replaceElement(umlElem, srcUrl) {
+function replaceElement(umlElem, imgElem) {
 	var parent = umlElem.parentNode;
 	if (parent !== null) { // for asciidoc (div div pre)
-		var imgElem = document.createElement("img");
-		imgElem.setAttribute("src", escapeHtml(srcUrl));
-		imgElem.setAttribute("title", "");
-		imgElem.style.margin = "auto";
-		imgElem.style.display = "block";
 		parent.replaceChild(imgElem, umlElem);
 		changeBackgroundColor(parent, codePre.parentColor, codePre.exist);
 
@@ -99,6 +94,13 @@ function replaceElement(umlElem, srcUrl) {
 	}
 }
 
+function createImgElement(srcUrl) {
+	var imgElem = document.createElement("img");
+	imgElem.setAttribute("src", escapeHtml(srcUrl));
+	imgElem.setAttribute("title", "");
+	return imgElem;
+}
+
 var siteProfiles = {
 	"default": {
 		"selector": "pre[lang='uml'], pre[lang='puml'], pre[lang='plantuml']",
@@ -110,7 +112,8 @@ var siteProfiles = {
 		},
 		"compress": function (elem) {
 			return compress(elem.querySelector("code").textContent.trim());
-		}
+		},
+		"createImg": createImgElement
 	},
 	"gitpitch.com": {
 		"selector": "pre code.lang-uml",
@@ -122,7 +125,8 @@ var siteProfiles = {
 		},
 		"compress": function (elem) {
 			return compress(elem.innerText.trim());
-		}
+		},
+		"createImg": createImgElement
 	},
 	"gitlab.com": {
 		"selector": "pre code span.line, div div pre", // markdown, asciidoc
@@ -147,7 +151,8 @@ var siteProfiles = {
 		},
 		"waitFor": function (document) {
 			return document.querySelector("i[aria-label='Loading content…']") === null;
-		}
+		},
+		"createImg": createImgElement
 	},
 	"bitbucket.org": {
 		"selector": "div.codehilite.language-plantuml > pre",
@@ -162,13 +167,15 @@ var siteProfiles = {
 		},
 		"waitFor": function (document) {
 			return document.getElementsByClassName("language-plantuml").length > 0;
-		}
+		},
+		"createImg": createImgElement
 	},
 	"backlog.jp": {
 		"selector": "pre.lang-uml, pre.lang-puml, pre.lang-plantuml",
 		"extract": function (elem) {
 			return elem.innerText.trim();
-		}
+		},
+		"createImg": createImgElement
 	},
 	"github.com": { // markdown + asciidoc
 		"selector": "pre[lang='uml'], pre[lang='puml'], pre[lang='plantuml'], div div pre", // markdown, asciidoc
@@ -191,7 +198,8 @@ var siteProfiles = {
 				plantuml = elem.textContent.trim();
 			}
 			return compress(plantuml);
-		}
+		},
+		"createImg": createImgElement
 	},
 	"atlassian.net": {
 		"selector": ".code-block code",
@@ -206,15 +214,22 @@ var siteProfiles = {
 			}
 			return wholeCode.trim();
 		},
-		"replace": function(elem) {
+		"replace": function (elem) {
 			return elem.closest ? (elem.closest("span") || elem) : elem;
 			// return elem;
 		},
-		"compress": function(elem) {
+		"compress": function (elem) {
 			return compress(siteProfiles["atlassian.net"].extract(elem));
 		},
 		"waitFor": function (document) {
 			return document.querySelector("#addCommentButton") !== null;
+		},
+		"createImg": function (srcUrl) {
+			var imgElem = createImgElement(srcUrl);
+			imgElem.style.margin = "auto";
+			imgElem.style.display = "block";
+			imgElem.style.maxWidth = "100%";
+			return imgElem;
 		}
 	},
 };
@@ -226,11 +241,11 @@ function onLoadAction(siteProfile, baseUrl){
 		var plantUmlServerUrl = baseUrl + siteProfile.compress(umlElem);
 		var replaceElem = siteProfile.replace(umlElem);
 		if (plantUmlServerUrl.lastIndexOf("https", 0) === 0) { // if URL starts with "https"
-			replaceElement(replaceElem, plantUmlServerUrl);
+			replaceElement(replaceElem, siteProfile.createImg(plantUmlServerUrl));
 		} else {
 			// to avoid mixed-content
 			chrome.runtime.sendMessage({ "action": "plantuml", "url": plantUmlServerUrl }, function(dataUri) {
-				replaceElement(replaceElem, dataUri);
+				replaceElement(replaceElem, siteProfile.createImg(dataUri));
 			});
 		}
 	});
